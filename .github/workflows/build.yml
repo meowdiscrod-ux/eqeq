@@ -1,0 +1,42 @@
+name: Build Meow Client
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unzip the client source
+        run: |
+          ZIP=$(find . -name "*.zip" -not -path "./.git/*" | head -n 1)
+          echo "Using: $ZIP"
+          test -n "$ZIP" || { echo "No zip found in the repo"; ls -R; exit 1; }
+          mkdir -p _src
+          unzip -q "$ZIP" -d _src
+          DIR=$(dirname "$(find _src -maxdepth 3 -name build.gradle | head -n 1)")
+          echo "SRC_DIR=$DIR" >> "$GITHUB_ENV"
+
+      - name: Build jar
+        working-directory: ${{ env.SRC_DIR }}
+        run: |
+          chmod +x gradlew
+          ./gradlew build --no-daemon --stacktrace
+          rm -f build/libs/*-sources.jar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meow-client
+          path: ${{ env.SRC_DIR }}/build/libs/*.jar
+          if-no-files-found: error
